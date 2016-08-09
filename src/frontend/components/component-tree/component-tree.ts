@@ -1,12 +1,9 @@
-import {Component, Inject, ElementRef} from '@angular/core';
+import {Component, ElementRef, Input} from '@angular/core';
 import {NgFor} from '@angular/common';
 import {NodeItem} from '../node-item/node-item';
-import {UserActionType}
-  from '../../actions/action-constants';
 
 @Component({
   selector: 'component-tree',
-  inputs: ['tree', 'changedNodes', 'selectedNode', 'closedNodes'],
   templateUrl: 'src/frontend/components/component-tree/component-tree.html',
   host: {'class': 'flex overflow-scroll'},
   directives: [NgFor, NodeItem]
@@ -15,8 +12,12 @@ import {UserActionType}
  * Displays the components' hierarchy
  */
 export class ComponentTree {
+  @Input() tree: any;
+  @Input() changedNodes: any;
+  @Input() selectedNode: any;
+  @Input() closedNodes: Array<any>;
+  @Input() allowedComponentTreeDepth: number;
 
-  private tree: any;
   private prevSelectedNode: Element;
 
   constructor(
@@ -26,8 +27,12 @@ export class ComponentTree {
   scrollToViewIfNeeded(node) {
     const selectedNodeBound = node.getBoundingClientRect();
     const treeViewBound = this.el.nativeElement.getBoundingClientRect();
+    const scrollBarHeight = this.el.nativeElement.offsetHeight -
+      this.el.nativeElement.clientHeight;
     const topOffset = selectedNodeBound.top - treeViewBound.top;
-    const bottomOffset = selectedNodeBound.bottom - treeViewBound.bottom;
+    const bottomOffset = selectedNodeBound.bottom - treeViewBound.bottom +
+      scrollBarHeight;
+
     if (topOffset < 0) {              // node is too high
       this.el.nativeElement.scrollTop += topOffset;
     } else if (bottomOffset > 0) {    // node is too low
@@ -44,4 +49,7 @@ export class ComponentTree {
     }
   }
 
+  trackById(index: number, node: any): string {
+    return node.id;
+  }
 }

@@ -19,13 +19,18 @@ declare var ng: { probe: Function, coreTokens: any };
 declare var getAllAngularRootElements: Function;
 declare var Reflect: { getOwnMetadata: Function };
 
-import { ChangeDetectionStrategy } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  InputMetadata,
+  OutputMetadata,
+} from '@angular/core';
 import { Observable } from 'rxjs/Observable';
 import { Subject } from 'rxjs/Subject';
 
 import { TreeNode, BaseAdapter } from './base';
 import { Description } from '../utils/description';
-import { ParseRouter } from '../utils/parse-router';
+import { ParseRouter, IS_OLD_ROUTER_HACK, parseConfigRoutes }
+from '../utils/parse-router';
 
 export class Angular2Adapter extends BaseAdapter {
   _tree: any = {};
@@ -70,8 +75,16 @@ export class Angular2Adapter extends BaseAdapter {
   showAppRoutes(): void {
     const root = this._findRoot();
     try {
-      const routes = ParseRouter.parseRoutes(
-        ng.probe(root).componentInstance.router.root.registry);
+      const router = ng.probe(root).componentInstance.router;
+      let routes: any;
+
+      if (IS_OLD_ROUTER_HACK(router)) {
+        // TODO: (ericjim): remove if-block and function
+        // once we no longer support the old router.
+        routes = ParseRouter.parseRoutes(router.root.registry);
+      } else {
+        routes = parseConfigRoutes(router);
+      }
 
       this.showRoutes(routes);
     } catch (error) {
@@ -89,8 +102,8 @@ export class Angular2Adapter extends BaseAdapter {
     if (compEl.children.length > 0) {
       compEl
       .children
+      .filter((child: any) => !this._isComponentExcluded(child))
       .forEach((child: any, childIdx: number) => {
-
         let index: string = idx;
         if (child.providerTokens.length > 0) {
           index = [idx, this._tree[idx]].join('.');
@@ -161,7 +174,6 @@ export class Angular2Adapter extends BaseAdapter {
   _emitNativeElement = (compEl: any, isRoot: boolean,
     idx: string): void => {
     const nativeElement = this._getNativeElement(compEl);
-    const nodeName = this._getComponentName(compEl);
 
     // When encounter a template comment, insert another comment with
     // augury-id above it.
@@ -174,12 +186,9 @@ export class Angular2Adapter extends BaseAdapter {
     } else {
       (<HTMLElement>nativeElement).setAttribute('augury-id', idx);
     }
-
     if (isRoot) {
       return this.addRoot(compEl);
-    } else if (nodeName !== 'option') {
-      // skipping the option to improve performance 
-      // It adds no value displaying node elements
+    } else {
       this.addChild(compEl);
     }
   };
@@ -286,6 +295,12 @@ export class Angular2Adapter extends BaseAdapter {
     return true;
   }
 
+  _isComponentExcluded(debugEl: any): boolean {
+    // skipping the option to improve performance
+    // It adds no value displaying node elements
+    return this._getComponentName(debugEl) === 'option';
+  }
+
   _getComponentState(debugEl: any): Object {
     let state;
     if (debugEl.componentInstance) {
@@ -307,24 +322,62 @@ export class Angular2Adapter extends BaseAdapter {
   _getComponentInput(debugEl: any): Object[] {
     let inputs = [];
     if (debugEl.componentInstance) {
+      // Get inputs from @Component({ inputs: [] })
       const metadata = Reflect.getOwnMetadata
         ('annotations', debugEl.componentInstance.constructor);
 
-      inputs = (metadata && metadata.length > 0) ?
-        metadata[0].inputs : [];
+      inputs = (metadata && metadata.length > 0 && metadata[0].inputs) || [];
+
+      // Get inputs from @Input()
+      const propMetadata = Reflect.getOwnMetadata('propMetadata',
+        debugEl.componentInstance.constructor);
+
+      if (propMetadata) {
+        for (const key of Object.keys(propMetadata)) {
+          for (const meta of propMetadata[key]) {
+            if (meta.constructor.name === (InputMetadata as any).name) {
+              if (inputs.indexOf(key) < 0) { // avoid duplicates
+                if (meta.bindingPropertyName) {
+                  inputs.push(`${key}:${meta.bindingPropertyName}`);
+                } else {
+                  inputs.push(key);
+                }
+              }
+            }
+          }
+        }
+      }
     }
+
     return inputs;
   }
 
   _getComponentOutput(debugEl: any): Object {
+    // Get outputs from @Component({ outputs })
     let outputs = [];
     if (debugEl.componentInstance) {
       const metadata = Reflect.getOwnMetadata
         ('annotations', debugEl.componentInstance.constructor);
 
-      outputs = (metadata && metadata.length > 0) ?
-        metadata[0].outputs : [];
+      outputs = (metadata && metadata.length > 0 && metadata[0].outputs) || [];
+
+      // Get outputs from @Output()
+      const propMetadata = Reflect.getOwnMetadata('propMetadata',
+        debugEl.componentInstance.constructor);
+
+      if (propMetadata) {
+        for (const key of Object.keys(propMetadata)) {
+          for (const meta of propMetadata[key]) {
+            if (meta.constructor.name === (OutputMetadata as any).name) {
+              if (outputs.indexOf(key) < 0) { // avoid duplicates
+                outputs.push(key);
+              }
+            }
+          }
+        }
+      }
     }
+
     return outputs;
   }
 

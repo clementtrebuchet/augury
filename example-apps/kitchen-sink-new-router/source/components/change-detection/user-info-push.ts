@@ -3,8 +3,8 @@ import {Component, Input, ChangeDetectionStrategy}
 import {User} from './user';
 
 @Component({
-  selector: 'user-info-checkonce',
-  changeDetection: ChangeDetectionStrategy.CheckOnce,
+  selector: 'user-info-push',
+  changeDetection: ChangeDetectionStrategy.OnPush,
   styles: [`
     .bg {
       background-color: red;
@@ -12,12 +12,12 @@ import {User} from './user';
   `],
   template: `
     <div [ngClass]="{'bg' : user.isOnline}">
-      <h4>User Info CheckOnce</h4>
+      <h4>User Info OnPush</h4>
       <p>
         <label>User Id: {{user.id}} {{user.isOnline}}</label>
       </p>
     </div>`
 })
-export class UserInfoCheckOnce {
+export class UserInfoPush {
   @Input() user: User;
 }

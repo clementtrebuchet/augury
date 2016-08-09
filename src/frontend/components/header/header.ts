@@ -1,4 +1,11 @@
-import {Component, NgZone, EventEmitter, Output} from '@angular/core';
+import {
+  Component,
+  NgZone,
+  EventEmitter,
+  Output,
+  ElementRef,
+  Input
+} from '@angular/core';
 import {FORM_DIRECTIVES} from '@angular/common';
 
 import {UserActions} from '../../actions/user-actions/user-actions';
@@ -8,24 +15,30 @@ import {ComponentDataStore}
 @Component({
   selector: 'augury-header',
   templateUrl: 'src/frontend/components/header/header.html',
-  inputs: ['searchDisabled', 'theme']
+  host: {
+    '(document:click)': 'resetIfSettingOpened($event)'
+  }
 })
 export class Header {
 
-  private searchDisabled: boolean;
+  @Input() searchDisabled: boolean;
+  @Input() theme: string;
   private searchIndex: number = 0;
   private totalSearchCount: number = 0;
   private query: string = '';
   private settingOpened: boolean = false;
-  private theme: string;
+  private elementRef;
 
   @Output() newTheme: EventEmitter<string> = new EventEmitter<string>();
 
   constructor(
     private userActions: UserActions,
     private componentDataStore: ComponentDataStore,
-    private _ngZone: NgZone
+    private _ngZone: NgZone,
+    elementRef: ElementRef
   ) {
+
+    this.elementRef = elementRef;
 
     this.componentDataStore.dataStream
       .subscribe((data: any) => {
@@ -42,12 +55,29 @@ export class Header {
 
   resetTheme() {
     this.settingOpened = false;
-    // document.removeEventListener('click', this.resetTheme.bind(this), false);
+  }
+
+  resetIfSettingOpened(event) {
+    let clickedComponent = event.target;
+    if (!clickedComponent) {
+      return;
+    }
+    let menuElement = this.elementRef.nativeElement
+      .querySelector('#augury-theme-menu');
+    let menuButtonElement = this.elementRef.nativeElement
+      .querySelector('#augury-theme-menu-button');
+
+    // If click was not inside menu button or menu, close the menu.
+    let inside = (menuElement && menuElement.contains(clickedComponent)) ||
+      (menuButtonElement && menuButtonElement.contains(clickedComponent));
+
+    if (!inside) {
+      this.resetTheme();
+    }
   }
 
   openSettings() {
     this.settingOpened = !this.settingOpened;
-    // document.addEventListener('click', this.resetTheme.bind(this), false);
   }
 
   themeChange(theme, selected) {

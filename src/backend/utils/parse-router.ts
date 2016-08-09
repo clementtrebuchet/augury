@@ -1,5 +1,3 @@
-import {RouteRule} from '@angular/router-deprecated/src/rules/rules';
-
 export interface Route {
   name: string;
   hash: string;
@@ -16,6 +14,7 @@ export interface MainRoute {
   children: Array<Route>;
 }
 
+// *** Deprecated Router ***
 export class ParseRouter {
 
   private static NAME_REGEX = /function ([^\(]*)/;
@@ -69,7 +68,7 @@ export class ParseRouter {
   }
 
   private static getRoute
-    (value: RouteRule, name: string, isAux: boolean = false): Route {
+    (value: any, name: string, isAux: boolean = false): Route {
     const handler: string =
       this.NAME_REGEX.exec(value.handler.componentType + '')[1];
 
@@ -83,4 +82,64 @@ export class ParseRouter {
       isAux
     };
   }
+}
+
+export function IS_OLD_ROUTER_HACK(router) : boolean {
+
+  // `config` key is different for both routers, 
+  // it's highly unlikely that the deprecated router will change this.
+  const componentRouterConfigIsArray: boolean = Array.isArray(router.config);
+  const deprecatedRouterConfigIsFunction: boolean =
+    typeof router.config === 'function';
+  const oldConfig =
+    deprecatedRouterConfigIsFunction && !componentRouterConfigIsArray;
+
+  // root of the app is stored in a different key.
+  const deprecatedRootComponentKey: boolean =
+    router.hasOwnProperty('root');
+  const componentRouterRootComponentKey: boolean =
+    router.hasOwnProperty('rootComponentType');
+  const oldRoot =
+    deprecatedRootComponentKey && !componentRouterRootComponentKey;
+
+  return oldRoot && oldConfig;
+}
+
+// *** Component Router ***
+export function parseConfigRoutes(router: any): MainRoute {
+  const rootName = router.rootComponentType.name;
+  const rootChildren: [any] = router.config;
+
+  const root = {
+    handler: rootName,
+    name: rootName,
+    path: '/',
+    children: rootChildren ? assignChildrenToParent(null, rootChildren) : []
+  };
+
+  return root;
+}
+
+function assignChildrenToParent(parent, children): [any] {
+  return children.map((child) => {
+    const childName = childRouteName(child);
+    const childDescendents: [any] = child.children;
+
+    // only found in aux routes, otherwise property will be undefined
+    const isAuxRoute = !!child.outlet;
+
+    return {
+      handler: childName,
+      name: childName,
+      parent: parent,
+      path: `/${child.path}`,
+      isAux: isAuxRoute,
+      children: childDescendents ?
+        assignChildrenToParent(this, childDescendents) : []
+    };
+  });
+}
+
+function childRouteName(child): string {
+  return child.component ? child.component.name : 'no-name-route';
 }
